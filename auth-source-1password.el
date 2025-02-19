@@ -1,9 +1,11 @@
+
 ;;; auth-source-1password.el --- 1password integration for auth-source -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023 Dominick LoBraico
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Author: Dominick LoBraico <auth-source-1password@lobrai.co>
+;;         James Conroy-Finn <james@invetica.co.uk>
 ;; Created: 2023-04-09
 ;; URL: https://github.com/dlobraico
 
@@ -20,10 +22,15 @@
 (require 'auth-source)
 
 (defgroup auth-source-1password nil
-  "1password auth source settings."
+  "A 1Password backend for auth-source."
   :group 'auth-source
   :tag "auth-source-1password"
   :prefix "1password-")
+
+(defcustom auth-source-1password-account ""
+  "Optional 1Password account to use when searching for secrets."
+  :type 'string
+  :group 'auth-source-1password)
 
 (defcustom auth-source-1password-vault "Personal"
   "1Password vault to use when searching for secrets."
@@ -31,7 +38,7 @@
   :group 'auth-source-1password)
 
 (defcustom auth-source-1password-executable "op"
-  "Executable used for 1password."
+  "Executable used by auth-source-1password to read secrets."
   :type 'string
   :group 'auth-source-1password)
 
@@ -47,21 +54,22 @@ by host and user."
   (mapconcat #'identity (list auth-source-1password-vault host user) "/"))
 
 (cl-defun auth-source-1password-search (&rest spec
-                                           &key backend type host user port
-                                           &allow-other-keys)
-  "Searche 1password for the specified user and host.
+                                              &key backend type host user port
+                                              &allow-other-keys)
+  "Search 1password for the specified user and host.
 SPEC, BACKEND, TYPE, HOST, USER and PORT are required by auth-source."
   (if (executable-find auth-source-1password-executable)
-      (let ((got-secret
+      (let ((secret
              (string-trim
               (shell-command-to-string
-               (format "%s read op://%s"
+               (format "%s read %s op://%s"
                        auth-source-1password-executable
+                       (when (not (string-equal "" auth-source-1password-account))
+                         (concat "--account " auth-source-1password-account))
                        (shell-quote-argument (funcall auth-source-1password-construct-secret-reference backend type host user port)))))))
-        (list (list :user user
-                    :secret got-secret)))
-    ;; If not executable was found, return nil and show a warning
-    (warn "`auth-source-1password': Could not find executable '%s' to query 1password" auth-source-1password-executable)))
+        (list (list :user user :secret secret)))
+    (warn "`auth-source-1password': Could not find executable '%s' to query 1password"
+          auth-source-1password-executable)))
 
 ;;;###autoload
 (defun auth-source-1password-enable ()
