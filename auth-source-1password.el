@@ -42,34 +42,41 @@
   :type 'string
   :group 'auth-source-1password)
 
-(defcustom auth-source-1password-construct-secret-reference 'auth-source-1password--1password-construct-query-path
+(defcustom auth-source-1password-construct-secret-reference 'auth-source-1password--make-secret-reference
   "Function to construct the query path in the 1password store."
   :type 'function
   :group 'auth-source-1password)
 
-(defun auth-source-1password--1password-construct-query-path (_backend _type host user _port)
+(defun auth-source-1password--make-secret-reference (_backend _type host user _port)
   "Construct the full entry-path for the 1password entry for HOST and USER.
 Usually starting with the `auth-source-1password-vault', followed
 by host and user."
   (mapconcat #'identity (list auth-source-1password-vault host user) "/"))
+
+(defun auth-source-1password--op-read (executable account secret-reference)
+  (format "%s read %s op://%s"
+          executable
+          (when (not (string-equal "" account)) (concat "--account " account))
+          secret-reference))
 
 (cl-defun auth-source-1password-search (&rest spec
                                               &key backend type host user port
                                               &allow-other-keys)
   "Search 1password for the specified user and host.
 SPEC, BACKEND, TYPE, HOST, USER and PORT are required by auth-source."
-  (if (executable-find auth-source-1password-executable)
-      (let ((secret
-             (string-trim
-              (shell-command-to-string
-               (format "%s read %s op://%s"
-                       auth-source-1password-executable
-                       (when (not (string-equal "" auth-source-1password-account))
-                         (concat "--account " auth-source-1password-account))
-                       (shell-quote-argument (funcall auth-source-1password-construct-secret-reference backend type host user port)))))))
-        (list (list :user user :secret secret)))
-    (warn "`auth-source-1password': Could not find executable '%s' to query 1password"
-          auth-source-1password-executable)))
+  (if (not (executable-find auth-source-1password-executable))
+      (warn "`auth-source-1password': Could not find executable '%s'."
+            auth-source-1password-executable)
+    (let* ((secret-reference (shell-quote-argument
+                              (funcall auth-source-1password-construct-secret-reference backend type host user port)))
+           (shell-command (auth-source-1password--op-read
+                           auth-source-1password-executable
+                           auth-source-1password-account
+                           secret-reference)))
+      (message "`auth-source-1password': %s" shell-command)
+      (list
+       (list :user user
+             :secret (string-trim (shell-command-to-string shell-command)))))))
 
 ;;;###autoload
 (defun auth-source-1password-enable ()
