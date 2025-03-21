@@ -54,9 +54,11 @@ by host and user."
   (mapconcat #'identity (list auth-source-1password-vault host user) "/"))
 
 (defun auth-source-1password--op-read (executable account secret-reference)
-  (format "%s read %s op://%s"
-          executable
-          (when (not (string-equal "" account)) (concat "--account " account))
+  (concat executable
+          " read"
+          (when (and account (not (string-empty-p account)))
+            (concat " --account " account))
+          " op://"
           secret-reference))
 
 (cl-defun auth-source-1password-search (&rest spec
